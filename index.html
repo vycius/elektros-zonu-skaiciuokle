@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elektros Išlaidų Skaičiuoklė</title>
+    <meta name="description" content="Nemokama elektros išlaidų skaičiuoklė. Įkelkite ESO suvartojimo duomenis ir palyginkite fiksuotos, dviejų ir keturių zonų tarifus pagal savo realų vartojimą.">
+    <meta name="keywords" content="elektra, elektros kaina, tarifai, skaičiuoklė, ESO, elektros planai, fiksuota kaina, dvi zonos, keturios zonos, Lietuva">
+    <meta name="author" content="Karolis Vyčius">
+    <meta property="og:title" content="Elektros Išlaidų Skaičiuoklė">
+    <meta property="og:description" content="Įkelkite ESO duomenis ir palyginkite elektros tarifus. Sužinokite, kuris planas jums finansiškai naudingiausias.">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="lt_LT">
+    <meta property="og:url" content="https://elektra.vycius.lt/">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Elektros Išlaidų Skaičiuoklė">
+    <meta name="twitter:description" content="Palyginkite fiksuotą, dviejų ir keturių zonų elektros planus pagal realų vartojimą.">
+
+    <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "WebApplication",
+            "name": "Elektros Išlaidų Skaičiuoklė",
+            "url": "https://elektra.vycius.lt/",
+            "description": "Nemokama elektros išlaidų skaičiuoklė. Įkelkite ESO suvartojimo duomenis ir palyginkite tarifus pagal savo realų vartojimą.",
+            "applicationCategory": "UtilityApplication",
+            "operatingSystem": "Web",
+            "inLanguage": "lt",
+            "author": {
+                "@type": "Organization",
+                "name": "Elektros Išlaidų Skaičiuoklė"
+            }
+        }
+    </script>
+    <!-- Tailwind CSS iš CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Papa Parse CSV apdorojimui -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <!-- JSZip ZIP failų apdorojimui -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- Chart.js diagramoms -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Papildomi stiliai sklandesniam veikimui */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .loader {
+            border-top-color: #3498db;
+            -webkit-animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite;
+        }
+        @-webkit-keyframes spin {
+            0% { -webkit-transform: rotate(0deg); }
+            100% { -webkit-transform: rotate(360deg); }
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Stilius pigiausiam tarifui lentelėje */
+        .cheapest-cell {
+            background-color: #dcfce7; /* Šviesiai žalia */
+            font-weight: bold;
+            color: #15803d;
+        }
+        /* Stilius informaciniams paaiškinimams (tooltip) */
+        .tooltip-container {
+            position: relative;
+            display: inline-block;
+            cursor: pointer;
+        }
+        .tooltip-text {
+            visibility: hidden;
+            width: 240px;
+            background-color: #555;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 8px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -120px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.875rem;
+            line-height: 1.25rem;
+        }
+        .tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #555 transparent transparent transparent;
+        }
+        .tooltip-container:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+<div class="container mx-auto p-4 md:p-8">
+    <header class="text-center mb-10">
+        <h1 class="text-4xl md:text-5xl font-bold text-gray-900">Elektros Išlaidų Skaičiuoklė</h1>
+        <p class="text-lg text-gray-600 mt-3">Palyginkite laiko zonų planus pagal savo realų suvartojimą.</p>
+    </header>
+
+    <main class="space-y-10">
+        <!-- 1. Failo įkėlimo ir pranešimų sekcija -->
+        <section class="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-800 flex items-center">
+                <svg class="w-8 h-8 mr-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                1 Žingsnis: Įkelkite  valandinius duomenis iš ESO savitarnos
+            </h2>
+            <div class="flex flex-col md:flex-row items-start md:items-center gap-4">
+                <div>
+                    <label for="fileInput" class="block text-base font-medium text-gray-700 mb-2">Pasirinkite suvartojimo ataskaitą (.csv arba .zip)</label>
+                    <input type="file" id="fileInput" accept=".csv,.zip" class="block w-full text-base text-gray-700
+                            file:mr-4 file:py-3 file:px-5
+                            file:rounded-lg file:border-0
+                            file:text-sm file:font-semibold
+                            file:bg-blue-100 file:text-blue-700
+                            hover:file:bg-blue-200 cursor-pointer"/>
+                </div>
+                <div id="status" class="mt-2 md:mt-0 md:ml-6 flex-grow text-base">
+                    <!-- Pranešimai vartotojui bus rodomi čia -->
+                </div>
+            </div>
+            <p class="text-sm text-gray-500 mt-4">Ataskaitą galite gauti iš savo ESO savitarnos.</p>
+        </section>
+
+        <!-- 2. Tarifų konfigūracijos sekcija -->
+        <section id="config-section" class="bg-white p-6 rounded-xl shadow-lg border border-gray-200 opacity-50 pointer-events-none">
+            <h2 class="text-2xl font-semibold mb-6 text-gray-800 flex items-center">
+                <svg class="w-8 h-8 mr-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                2 Žingsnis: Įveskite planų kainas
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Fiksuota Kaina -->
+                <div class="border border-gray-200 p-5 rounded-lg bg-gray-50">
+                    <h3 class="text-xl font-bold text-blue-800 mb-3 flex items-center">
+                        Fiksuota kaina
+                        <div class="tooltip-container ml-2">
+                            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span class="tooltip-text">Kaina yra vienoda visą parą, kiekvieną dieną. Paprasčiausias planas.</span>
+                        </div>
+                    </h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-base font-medium text-gray-700">Kaina (€/kWh)</label>
+                            <input type="number" id="fixed_price" value="0.189" step="0.001" class="tariff-input w-full p-2.5 mt-1 border-gray-300 rounded-md text-base">
+                        </div>
+                        <div>
+                            <label class="block text-base font-medium text-gray-700">Mėnesinis mokestis (€)</label>
+                            <input type="number" id="fixed_fee" value="3.00" step="0.01" class="tariff-input w-full p-2.5 mt-1 border-gray-300 rounded-md text-base">
+                        </div>
+                    </div>
+                </div>
+                <!-- Dvi Zonos -->
+                <div class="border border-gray-200 p-5 rounded-lg bg-gray-50">
+                    <h3 class="text-xl font-bold text-green-800 mb-3 flex items-center">
+                        Dvi zonos
+                        <div class="tooltip-container ml-2">
+                            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span class="tooltip-text">Skaičiuojama pagal senesnių skaitiklių logiką: laikas visada fiksuotas pagal žiemos laiką (UTC+2) ir nesikeičia įvedus vasaros laiką. Dienos tarifas galioja I-V 7:00-23:00.</span>
+                        </div>
+                    </h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-base font-medium text-gray-700">Dienos kaina</label>
+                            <input type="number" id="two_zone_day" value="0.215" step="0.001" class="tariff-input w-full p-2.5 mt-1 border-gray-300 rounded-md text-base">
+                        </div>
+                        <div>
+                            <label class="block text-base font-medium text-gray-700">Nakties/Savaitgalio kaina</label>
+                            <input type="number" id="two_zone_night" value="0.128" step="0.001" class="tariff-input w-full p-2.5 mt-1 border-gray-300 rounded-md text-base">
+                        </div>
+                        <div>
+                            <label class="block text-base font-medium text-gray-700">Mėnesinis mokestis (€)</label>
+                            <input type="number" id="two_zone_fee" value="3.00" step="0.01" class="tariff-input w-full p-2.5 mt-1 border-gray-300 rounded-md text-base">
+                        </div>
+                    </div>
+                </div>
+                <!-- Keturios Zonos -->
+                <div class="border border-gray-200 p-5 rounded-lg bg-gray-50 md:col-span-2 lg:col-span-1">
+                    <h3 class="text-xl font-bold text-purple-800 mb-3 flex items-center">
+                        Keturios zonos
+                        <div class="tooltip-container ml-2">
+                            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span class="tooltip-text">Skaičiuojama pagal išmaniųjų skaitiklių logiką: laikas automatiškai persijungia tarp vasaros ir žiemos, todėl tarifų valandos visada atitinka realų laiką.</span>
+                        </div>
+                    </h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-base font-medium text-gray-700">Naktis</label>
+                            <input type="number" id="four_zone_night" value="0.132" step="0.001" class="tariff-input w-full p-2.5 mt-1 border-gray-300 rounded-md text-base">
+                        </div>
+                        <div>
+                            <label class="block text-base font-medium text-gray-700">Rytas</label>
+                            <input type="number" id="four_zone_morning" value="0.153" step="0.001" class="tariff-input w-full p-2.5 mt-1 border-gray-300 rounded-md text-base">
+                        </div>
+                        <div>
+                            <label class="block text-base font-medium text-gray-700">Diena</label>
+                            <input type="number" id="four_zone_day" value="0.198" step="0.001" class="tariff-input w-full p-2.5 mt-1 border-gray-300 rounded-md text-base">
+                        </div>
+                        <div>
+                            <label class="block text-base font-medium text-gray-700">Vakaras</label>
+                            <input type="number" id="four_zone_evening" value="0.238" step="0.001" class="tariff-input w-full p-2.5 mt-1 border-gray-300 rounded-md text-base">
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="block text-base font-medium text-gray-700">Mėnesinis mokestis (€)</label>
+                            <input type="number" id="four_zone_fee" value="3.00" step="0.01" class="tariff-input w-full p-2.5 mt-1 border-gray-300 rounded-md text-base">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. Rezultatų sekcija -->
+        <section id="results-section" class="hidden">
+            <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+                <h2 class="text-2xl font-semibold mb-6 text-gray-800 flex items-center">
+                    <svg class="w-8 h-8 mr-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                    3 Žingsnis: Analizės rezultatai
+                </h2>
+                <!-- Diagramos konteineris -->
+                <div class="relative h-96 md:h-[500px] mb-8">
+                    <canvas id="costsChart"></canvas>
+                </div>
+                <!-- Lentelės konteineris -->
+                <div class="overflow-x-auto">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-700">Išlaidų palyginimas pagal mėnesius</h3>
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-100">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">Mėnuo</th>
+                            <th class="px-6 py-3 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">Fiksuota kaina</th>
+                            <th class="px-6 py-3 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">Dvi zonos</th>
+                            <th class="px-6 py-3 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">Keturios zonos</th>
+                        </tr>
+                        </thead>
+                        <tbody id="resultsTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Duomenys bus įterpti čia -->
+                        </tbody>
+                        <tfoot class="bg-gray-200">
+                        <tr id="totalsRow">
+                            <!-- Bendros sumos bus įterptos čia -->
+                        </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <!-- Išvadų blokas -->
+                <div id="summary-section" class="mt-8 p-5 rounded-lg bg-blue-50 border border-blue-200 hidden">
+                    <!-- Išvados bus įterptos čia -->
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // === DOM Elementai ===
+        const fileInput = document.getElementById('fileInput');
+        const statusDiv = document.getElementById('status');
+        const configSection = document.getElementById('config-section');
+        const resultsSection = document.getElementById('results-section');
+        const resultsTableBody = document.getElementById('resultsTableBody');
+        const totalsRow = document.getElementById('totalsRow');
+        const chartCanvas = document.getElementById('costsChart');
+        const tariffInputs = document.querySelectorAll('.tariff-input');
+        const summarySection = document.getElementById('summary-section');
+
+        // === Būsenos kintamieji ===
+        let processedData = []; // Laikomi apdoroti duomenys
+        let costsChartInstance = null; // Chart.js instancija
+        const LITHUANIA_TZ = 'Europe/Vilnius';
+
+        // === Event Listeners ===
+        fileInput.addEventListener('change', handleFileSelect);
+        tariffInputs.forEach(input => {
+            input.addEventListener('input', () => {
+                if (processedData.length > 0) {
+                    calculateAndDisplayResults();
+                }
+            });
+        });
+
+        /**
+         * Valdo failo pasirinkimą, tikrina tipą ir pradeda apdorojimą.
+         */
+        async function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            setStatus('info', 'Apdorojami duomenys...');
+            resultsSection.classList.add('hidden'); // Paslepiam senus rezultatus
+
+            try {
+                if (file.name.endsWith('.zip')) {
+                    const jszip = new JSZip();
+                    const zip = await jszip.loadAsync(file);
+                    const csvFile = Object.values(zip.files).find(f => f.name.toLowerCase().endsWith('.csv'));
+
+                    if (csvFile) {
+                        const csvContent = await csvFile.async('string');
+                        parseCSV(csvContent);
+                    } else {
+                        setStatus('error', 'Klaida: ZIP archyve nerastas .csv failas.');
+                    }
+                } else if (file.name.endsWith('.csv')) {
+                    parseCSV(file);
+                } else {
+                    setStatus('error', 'Klaida: palaikomi tik .csv ir .zip failai.');
+                }
+            } catch (error) {
+                console.error('Failo skaitymo klaida:', error);
+                setStatus('error', 'Klaida skaitant failą. Patikrinkite konsolę.');
+            }
+        }
+
+        /**
+         * Naudoja PapaParse biblioteką CSV duomenims apdoroti.
+         */
+        function parseCSV(csvInput) {
+            Papa.parse(csvInput, {
+                header: true,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    if (results.errors.length > 0) {
+                        console.error('CSV Parsing Errors:', results.errors);
+                        setStatus('error', 'Klaida apdorojant CSV. Patikrinkite failo formatą.');
+                        return;
+                    }
+                    processRawData(results.data);
+                },
+                error: (err) => {
+                    console.error('PapaParse Error:', err);
+                    setStatus('error', 'Kritinė klaida apdorojant CSV failą.');
+                }
+            });
+        }
+
+        /**
+         * Apdoroja "žalius" duomenis iš CSV, juos validuoja ir klasifikuoja.
+         */
+        function processRawData(rawData) {
+            processedData = [];
+            let invalidRows = 0;
+
+            rawData.forEach(row => {
+                const dateStr = row['Data, valanda'];
+                const kwhStr = row['Kiekis, kWh'];
+
+                // Pakeičiame kablelį į tašką dešimtainiam skaičiui
+                const kwh = parseFloat(String(kwhStr).replace(',', '.'));
+
+                if (!dateStr || isNaN(kwh) || kwh <= 0) {
+                    invalidRows++;
+                    return; // Praleidžiame netinkamas eilutes
+                }
+
+                const dateObj = new Date(dateStr);
+
+                if (isNaN(dateObj.getTime())) {
+                    invalidRows++;
+                    return; // Praleidžiame eilutes su netinkama data
+                }
+
+                const month = dateObj.getFullYear() + '-' + String(dateObj.getMonth() + 1).padStart(2, '0');
+
+                // --- Logic for Four-Zone (Smart Meter / Local Time) ---
+                const localHour = parseInt(dateObj.toLocaleString('lt-LT', { timeZone: LITHUANIA_TZ, hour: '2-digit', hour12: false }));
+                const localJsWeekday = dateObj.getDay(); // Sunday = 0, ..., Saturday = 6
+                const localWeekday = localJsWeekday === 0 ? 6 : localJsWeekday - 1; // Convert to Monday = 0, ..., Sunday = 6
+
+                // --- Logic for Two-Zone (Old Meter / Fixed Winter Time UTC+2) ---
+                // Create a new date object representing UTC time + 2 hours
+                const winterTimeDate = new Date(dateObj.getTime() + 2 * 60 * 60 * 1000);
+                const winterHour = winterTimeDate.getUTCHours();
+                const winterJsWeekday = winterTimeDate.getUTCDay();
+                const winterWeekday = winterJsWeekday === 0 ? 6 : winterJsWeekday - 1; // Convert to Monday = 0, ..., Sunday = 6
+
+                processedData.push({
+                    date: dateObj,
+                    kwh: kwh,
+                    month: month,
+                    twoZoneCategory: classifyTwoZones(winterWeekday, winterHour),
+                    fourZoneCategory: classifyFourZones(localWeekday, localHour),
+                });
+            });
+
+            if (processedData.length === 0) {
+                setStatus('error', `Nerasta tinkamų duomenų. Patikrinkite, ar faile yra eilutės su formatu 'YYYY-MM-DD HH:MM' ir 'KWh' > 0. Praleista eilučių: ${invalidRows}.`);
+                return;
+            }
+
+            setStatus('success', `Sėkmingai apdorota ${processedData.length} įrašų. Praleista netinkamų: ${invalidRows}.`);
+            configSection.classList.remove('opacity-50', 'pointer-events-none');
+            resultsSection.classList.remove('hidden');
+            calculateAndDisplayResults();
+        }
+
+        /**
+         * Klasifikuoja laiko momentą į "diena" arba "naktis" pagal dviejų zonų planą (pagal žiemos laiką).
+         */
+        function classifyTwoZones(weekday, hour) {
+            // Savaitgalis (Šeštadienis: 5, Sekmadienis: 6)
+            if (weekday >= 5) {
+                return 'night';
+            }
+            // Darbo diena
+            if (hour >= 7 && hour < 23) {
+                return 'day';
+            }
+            return 'night';
+        }
+
+        /**
+         * Klasifikuoja laiko momentą pagal keturių zonų planą (pagal realų laiką).
+         */
+        function classifyFourZones(weekday, hour) {
+            // Savaitgalis (Šeštadienis: 5, Sekmadienis: 6)
+            if (weekday >= 5) {
+                if ((hour >= 22 || hour < 7)) return 'night';
+                if (hour >= 7 && hour < 22) return 'day';
+            }
+            // Darbo dienos
+            else {
+                if ((hour >= 22 || hour < 5)) return 'night';
+                if (hour >= 5 && hour < 7) return 'morning';
+                if (hour >= 7 && hour < 17) return 'day';
+                if (hour >= 17 && hour < 22) return 'evening';
+            }
+            return 'unknown'; // Atsarginis variantas
+        }
+
+        /**
+         * Surenka tarifų kainas iš vartotojo sąsajos.
+         */
+        function getTariffValues() {
+            return {
+                fixed: { price: parseFloat(document.getElementById('fixed_price').value), fee: parseFloat(document.getElementById('fixed_fee').value) },
+                two_zone: {
+                    day: parseFloat(document.getElementById('two_zone_day').value),
+                    night: parseFloat(document.getElementById('two_zone_night').value),
+                    fee: parseFloat(document.getElementById('two_zone_fee').value)
+                },
+                four_zone: {
+                    night: parseFloat(document.getElementById('four_zone_night').value),
+                    morning: parseFloat(document.getElementById('four_zone_morning').value),
+                    day: parseFloat(document.getElementById('four_zone_day').value),
+                    evening: parseFloat(document.getElementById('four_zone_evening').value),
+                    fee: parseFloat(document.getElementById('four_zone_fee').value)
+                }
+            };
+        }
+
+        /**
+         * Pagrindinė funkcija, kuri surenka duomenis ir iškviečia skaičiavimo bei atvaizdavimo funkcijas.
+         */
+        function calculateAndDisplayResults() {
+            const tariffs = getTariffValues();
+            const monthlyCosts = calculateMonthlyCosts(processedData, tariffs);
+            const totals = calculateTotals(monthlyCosts);
+            updateTable(monthlyCosts, totals);
+            updateChart(monthlyCosts);
+            updateSummary(totals);
+        }
+
+        /**
+         * Apskaičiuoja mėnesines išlaidas pagal visus tarifų planus.
+         */
+        function calculateMonthlyCosts(data, tariffs) {
+            const monthlySummary = {};
+
+            data.forEach(item => {
+                if (!monthlySummary[item.month]) {
+                    monthlySummary[item.month] = {
+                        fixedCost: 0,
+                        twoZoneCost: 0,
+                        fourZoneCost: 0,
+                    };
+                }
+                monthlySummary[item.month].fixedCost += item.kwh * tariffs.fixed.price;
+                const twoZonePrice = item.twoZoneCategory === 'day' ? tariffs.two_zone.day : tariffs.two_zone.night;
+                monthlySummary[item.month].twoZoneCost += item.kwh * twoZonePrice;
+                let fourZonePrice = 0;
+                switch(item.fourZoneCategory) {
+                    case 'night': fourZonePrice = tariffs.four_zone.night; break;
+                    case 'morning': fourZonePrice = tariffs.four_zone.morning; break;
+                    case 'day': fourZonePrice = tariffs.four_zone.day; break;
+                    case 'evening': fourZonePrice = tariffs.four_zone.evening; break;
+                }
+                monthlySummary[item.month].fourZoneCost += item.kwh * fourZonePrice;
+            });
+
+            Object.keys(monthlySummary).forEach(month => {
+                monthlySummary[month].fixedCost += tariffs.fixed.fee;
+                monthlySummary[month].twoZoneCost += tariffs.two_zone.fee;
+                monthlySummary[month].fourZoneCost += tariffs.four_zone.fee;
+            });
+
+            return monthlySummary;
+        }
+
+        /**
+         * Apskaičiuoja bendras sumas per visą laikotarpį.
+         */
+        function calculateTotals(monthlyCosts) {
+            const totals = { fixed: 0, two_zone: 0, four_zone: 0 };
+            for (const month in monthlyCosts) {
+                totals.fixed += monthlyCosts[month].fixedCost;
+                totals.two_zone += monthlyCosts[month].twoZoneCost;
+                totals.four_zone += monthlyCosts[month].fourZoneCost;
+            }
+            return totals;
+        }
+
+        /**
+         * Atnaujina rezultatų lentelę.
+         */
+        function updateTable(monthlyCosts, totals) {
+            resultsTableBody.innerHTML = '';
+            const sortedMonths = Object.keys(monthlyCosts).sort();
+
+            sortedMonths.forEach(month => {
+                const costs = monthlyCosts[month];
+                const row = document.createElement('tr');
+
+                const costValues = [costs.fixedCost, costs.twoZoneCost, costs.fourZoneCost];
+                const minCost = Math.min(...costValues);
+
+                row.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-base font-medium text-gray-900">${month}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-base text-gray-600">${costs.fixedCost.toFixed(2)} €</td>
+                <td class="px-6 py-4 whitespace-nowrap text-base text-gray-600">${costs.twoZoneCost.toFixed(2)} €</td>
+                <td class="px-6 py-4 whitespace-nowrap text-base text-gray-600">${costs.fourZoneCost.toFixed(2)} €</td>
+            `;
+
+                const cells = row.getElementsByTagName('td');
+                if (costs.fixedCost === minCost) cells[1].classList.add('cheapest-cell');
+                if (costs.twoZoneCost === minCost) cells[2].classList.add('cheapest-cell');
+                if (costs.fourZoneCost === minCost) cells[3].classList.add('cheapest-cell');
+
+                resultsTableBody.appendChild(row);
+            });
+
+            totalsRow.innerHTML = `
+            <td class="px-6 py-4 text-left text-sm font-bold text-gray-800 uppercase tracking-wider">VISO</td>
+            <td class="px-6 py-4 text-left text-base font-bold text-gray-800">${totals.fixed.toFixed(2)} €</td>
+            <td class="px-6 py-4 text-left text-base font-bold text-gray-800">${totals.two_zone.toFixed(2)} €</td>
+            <td class="px-6 py-4 text-left text-base font-bold text-gray-800">${totals.four_zone.toFixed(2)} €</td>
+        `;
+        }
+
+        /**
+         * Atnaujina bendrų rezultatų išvadą.
+         */
+        function updateSummary(totals) {
+            const totalCosts = {
+                'Fiksuotos kainos': totals.fixed,
+                '"Dviejų zonų"': totals.two_zone,
+                '"Keturios zonų"': totals.four_zone
+            };
+
+            const cheapestPlanName = Object.keys(totalCosts).reduce((a, b) => totalCosts[a] < totalCosts[b] ? a : b);
+            const cheapestPlanCost = totalCosts[cheapestPlanName];
+            const mostExpensivePlanCost = Math.max(...Object.values(totalCosts));
+            const savings = mostExpensivePlanCost - cheapestPlanCost;
+
+            summarySection.innerHTML = `
+            <h3 class="text-xl font-bold text-blue-900 mb-2">Išvada</h3>
+            <p class="text-base text-gray-800">
+                Pagal Jūsų pateiktus duomenis, per visą analizuojamą laikotarpį Jums finansiškai naudingiausias yra
+                <strong class="text-green-700">${cheapestPlanName} planas</strong>.
+                ${savings > 1 ? `Pasirinkę šį planą, o ne brangiausią, būtumėte sutaupę maždaug <strong class="text-green-700">${savings.toFixed(2)} €</strong>.` : ''}
+            </p>
+        `;
+            summarySection.classList.remove('hidden');
+        }
+
+
+        /**
+         * Atnaujina arba sukuria kainų diagramą.
+         */
+        function updateChart(monthlyCosts) {
+            if (costsChartInstance) {
+                costsChartInstance.destroy();
+            }
+
+            const sortedMonths = Object.keys(monthlyCosts).sort();
+            const labels = sortedMonths;
+
+            const datasets = [
+                {
+                    label: 'Fiksuota kaina',
+                    data: sortedMonths.map(m => monthlyCosts[m].fixedCost.toFixed(2)),
+                    borderColor: '#3b82f6', // Mėlyna
+                    backgroundColor: '#3b82f6',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: 0.1
+                },
+                {
+                    label: 'Dvi zonos',
+                    data: sortedMonths.map(m => monthlyCosts[m].twoZoneCost.toFixed(2)),
+                    borderColor: '#16a34a', // Žalia
+                    backgroundColor: '#16a34a',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: 0.1
+                },
+                {
+                    label: 'Keturios zonos',
+                    data: sortedMonths.map(m => monthlyCosts[m].fourZoneCost.toFixed(2)),
+                    borderColor: '#8b5cf6', // Violetinė
+                    backgroundColor: '#8b5cf6',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: 0.1
+                }
+            ];
+
+            costsChartInstance = new Chart(chartCanvas, {
+                type: 'line',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + ' €';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Mėnesinių išlaidų palyginimas',
+                            font: { size: 18 }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += context.parsed.y + ' €';
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        /**
+         * Rodo pranešimus vartotojui.
+         */
+        function setStatus(type, message) {
+            statusDiv.innerHTML = '';
+            let colorClass = '';
+            let icon = '';
+
+            switch (type) {
+                case 'info':
+                    colorClass = 'text-blue-800 bg-blue-100';
+                    icon = `<div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-6 w-6 mr-3"></div>`;
+                    break;
+                case 'success':
+                    colorClass = 'text-green-800 bg-green-100';
+                    icon = '<span class="text-2xl mr-2">✔️</span>';
+                    break;
+                case 'error':
+                    colorClass = 'text-red-800 bg-red-100';
+                    icon = '<span class="text-2xl mr-2">❗</span>';
+                    break;
+            }
+
+            const statusMessage = document.createElement('div');
+            statusMessage.className = `p-4 rounded-lg flex items-center ${colorClass} text-base`;
+            statusMessage.innerHTML = `${icon} <span class="ml-2">${message}</span>`;
+            statusDiv.appendChild(statusMessage);
+        }
+    });
+</script>
+
+</body>
+</html>
+
